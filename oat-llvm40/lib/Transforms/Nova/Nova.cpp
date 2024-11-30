@@ -428,9 +428,7 @@ void Nova::InitializeGS(GlobalStateRef gs, Module &M) {
 
 void Nova::ReverseSCC(std::vector<SCCRef> &sccVector, Function *f) {
   //遍历函数f中所有强联通分量
-    for (scc_iterator<Function *> I = scc_begin(f), 
-                                  IE = scc_end(f);
-                                  I != IE; ++I) {
+    for (scc_iterator<Function *> I = scc_begin(f), IE = scc_end(f);I != IE; ++I) {
         const std::vector<BasicBlock *> &SCCBBs = *I;//获得当前所有强联通分量的基本块的集合
         SCCRef tmpSCC = new SCC();//中间变量
         //遍历当前强联通分量中每个基本块
@@ -477,19 +475,20 @@ Function *Nova::ResolveCall(GlobalStateRef gs, CallInst &I) {
         return I.getCalledFunction();//返回当前函数调用指令I调用的函数的指针
     }
 }
-/*初始化函数：gs:全局状态;f:当前被调用的函数;I:调用指令*/
+/*初始化函数：gs:全局状态;f:被调用的函数;I:调用指令*/
 void Nova::InitializeFunction(GlobalStateRef gs, Function *f, CallInst &I) {
-    Value *var;//存储当前函数参数的值
-    TupleSet *ts = NULL;//存储函数参数的点对点映射信息
-    InstSet *is = NULL;//存储函数参数的污点映射
+    Value *var;//
+    TupleSet *ts = NULL;//存储该value对应的指令集合
+    InstSet *is = NULL;//存储该value对应的别名集合
 
     //errs() <<__func__<<" : \n";
 
     //将当前的函数调用指令 I 存储在全局状态 gs 的 ci 字段中
     gs->ci = &I;
+    
     /*定义两个迭代器 
-      1.argit:调用指令参数起始位置和结束迭代器，即形参
-      2.arg_iterator:被调用函数参数的起始和结束迭代器，即实参
+      1.argit:调用指令参数起始位置和结束迭代器，即实参
+      2.arg_iterator:被调用函数参数的起始和结束迭代器，即形参
     */
     CallInst::op_iterator argit = I.arg_begin(), argie = I.arg_end();
     Function::arg_iterator it = f->arg_begin(), ie = f->arg_end();
@@ -497,17 +496,17 @@ void Nova::InitializeFunction(GlobalStateRef gs, Function *f, CallInst &I) {
     for (;(argit != argie) && (it != ie); ++it, ++argit) {
         var = cast<Value>(&(*it));
 
-        // 将调用指令 args 中的 tMap 和 pMap 映射信息逐一复制到函数参数中
+        // 将实参args 中的 tMap 和 pMap 映射信息逐一复制到形参var中
         if (gs->pMap->find(*argit) != gs->pMap->end()) {
-          //若在pMap中不存在该argit形参，返回pMap->end();
+          //若在pMap中不存在该argit实参，返回pMap->end();
             if (gs->pMap->find(*argit) == gs->pMap->end()) {
                 continue;
             }
-            if (gs->tMap->find(*argit) == gs->tMap->end()) {//判断tmap中是否存在argit形参
+            if (gs->tMap->find(*argit) == gs->tMap->end()) {//判断tmap中是否存在argit实参
                 continue;
             }
-            //如果tmap和pMap中都存在，则执行..
-            ts = (*(gs->pMap))[*argit];//ts存储argit在pMap中的值
+            //如果tmap和pMap中都存在，则执行，将实参的状态信息传递给形参
+            ts = (*(gs->pMap))[*argit];
             (*(gs->pMap))[var] = ts;
 
             is = (*(gs->tMap))[*argit];
@@ -520,20 +519,20 @@ void Nova::InitializeFunction(GlobalStateRef gs, Function *f, CallInst &I) {
 //分析函数调用指令
 void Nova::HandleCall(GlobalStateRef gs, CallInst &I) {/*gs：全局状态;I：调用指令*/
     Value *var;
-    Function *f;
+    Function *f;//被调用函数
 
-    f = ResolveCall(gs, I);//标记该调用指令I已经处理过，并返回I调用函数的指针
+    f = ResolveCall(gs, I);//标记该调用指令I已经处理过，并返回I调用函数的指针，即被调用函数
     /*处理敏感数据*/
     if (f != NULL && f->getName() == "llvm.var.annotation") {
         //llvm.var.annotation(arg0, arg1, arg2, arg3), arg0 被标注为敏感的变量
-        var = I.getArgOperand(0);//获得调用的指令的第一个参数var
+        var = I.getArgOperand(0);//获得调用的指令的第一个实参var
         gs->senVarSet->insert(var);//将var插入全局状态中的敏感变量集合中
         errs() << "llvm.var.annotation: arg0: " << var->getName() << " \n";
     } else if (f != NULL) {
         //errs() << "\ncall inst: " << I << "\n";
         //errs() << "called func: " << f->getName() << "\n";
 
-        // handle parameters and global variables
+        // 处理参数和全局变量
         if (!f->isDeclaration()) {//若f存在函数体
             InitializeFunction(gs, f, I);
             Traversal(gs, f);
@@ -1405,21 +1404,21 @@ void Nova::UpdateTaintBitCast(GlobalStateRef gs, Instruction &I){
 
     (*(gs->tMap))[bci] = is;
 }
-
+/*点对点分析主要用于跟踪指针变量在程序中的指向关系，帮助分析哪些变量或内存地址可能被某些指针引用*/
 void Nova::PointsToAnalysis(GlobalStateRef gs, Instruction &I) {
-    if (isa<AllocaInst>(&I)) {
+    if (isa<AllocaInst>(&I)) {//用于在栈上分配内存
         UpdatePtoAlloca(gs, I);
-    } else if (I.isBinaryOp()){
+    } else if (I.isBinaryOp()){//二元操作符
         UpdatePtoBinOp(gs, I);
-    } else if (isa<LoadInst>(&I)){
+    } else if (isa<LoadInst>(&I)){//LoadInst指令用于加载内存中的值，通常涉及到指针解引用
         UpdatePtoLoad(gs, I);
-    } else if (isa<StoreInst>(&I)){
+    } else if (isa<StoreInst>(&I)){//StoreInst指令用于将值存储到内存中的某个位置。
         UpdatePtoStore(gs, I);
-    } else if (isa<GetElementPtrInst>(&I)){
+    } else if (isa<GetElementPtrInst>(&I)){//GetElementPtrInst（GEP）指令用于计算指针偏移，通常在数组、结构体等复合数据类型中使用
         UpdatePtoGEP(gs, I);
-    } else if (isa<ReturnInst>(&I)){
+    } else if (isa<ReturnInst>(&I)){//ReturnInst指令表示函数的返回指令，通常会涉及到返回值的传递
         UpdatePtoRet(gs, I);
-    } else if (isa<BitCastInst>(&I)){
+    } else if (isa<BitCastInst>(&I)){//BitCastInst指令用于类型转换，尤其是不同指针类型之间的转换
         UpdatePtoBitCast(gs, I);
     } else {
         // Not handled inst
@@ -1455,9 +1454,7 @@ void Nova::DispatchClients(GlobalStateRef gs, Instruction &I) {
 
 void Nova::VisitSCC(GlobalStateRef gs, SCC &scc) {/*gs:全局状态；scc：当前的强联通图*/
     //遍历当前强联通图中的每一个基本块
-    for (SCC::iterator BBI = scc.begin(),
-                       BBIE = scc.end();
-                       BBI != BBIE; ++BBI) {
+    for (SCC::iterator BBI = scc.begin(),BBIE = scc.end();BBI != BBIE; ++BBI) {
         errs() << (*BBI)->getName() << " ";//输出当前基本块的名字
         //遍历当前基本块的每一条指令
         for (Instruction &I: *(*BBI)) {
@@ -1472,13 +1469,12 @@ void Nova::VisitSCC(GlobalStateRef gs, SCC &scc) {/*gs:全局状态；scc：当�
 }
 
 void Nova::Traversal(GlobalStateRef gs, Function *f) {/*gs:全局状态；f：指向函数的指针 */
-    std::vector<SCCRef> sccVector;//SCCRef强联通分量
-    ReverseSCC(sccVector, f);//反转函数f的强联通分量
-
-    for (std::vector<SCCRef>::iterator it = sccVector.begin(), 
-                                       ie = sccVector.end();
-                                       it != ie; ++it) {
-        if ((*it)->size() > 1) {//如果强联通分量>1为循环
+    //定义了一组强联通图
+    std::vector<SCCRef> sccVector;
+    ReverseSCC(sccVector, f);//反转并初始化强联连图SCC集合
+    //遍历每一个SCC
+    for (std::vector<SCCRef>::iterator it = sccVector.begin(), ie = sccVector.end();it != ie; ++it) {
+        if ((*it)->size() > 1) {//检测当前强联通分量是否包含多个基本块，从而判断是否存在循环
             HandleLoop(gs, *(*it));
         } else {//不是循环
             //errs() << "SCC: ";

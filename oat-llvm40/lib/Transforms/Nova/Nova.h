@@ -65,7 +65,7 @@ namespace llvm{
 
     typedef struct GlobalState *GlobalStateRef; 
 
-    // SCC
+    // 强联通分量：一个SCC的内容
     typedef std::vector<BasicBlock *> SCC;
     typedef std::vector<BasicBlock *> *SCCRef;
 
@@ -119,23 +119,46 @@ struct GlobalState {
 struct Nova : public ModulePass {
     static char ID;
     Nova() : ModulePass(ID) {}
+    //runOnModule(Module &M) 是 pass 的核心函数，它将在整个模块上运行
     bool runOnModule(Module &M);
 
-    // def-use check
+    /*
+        定义-使用检查:对变量的定义和使用情况的跟踪
+            GetAnnotatedVariables：提取模块中已标注的变量。
+            DefUseCheck：检查模块中定义和使用的关系，可能是为了分析某个变量的使用链。
+            RecordDefineEvent：记录一个变量的定义事件。
+            CheckUseEvent：检查一个变量的使用事件
+        */
     void GetAnnotatedVariables(Module &M, GlobalStateRef gs);
     void DefUseCheck(Module &M, GlobalStateRef gs);
     void RecordDefineEvent(Module &M, Value *var);
     void CheckUseEvent(Module &M, Value *var);
     void InstrumentStoreInst(Instruction *inst, Value *addr, Value *val);
     void InstrumentLoadInst(Instruction *inst, Value *addr, Value *val);
-
-    // pointer boundary check
+    /*
+        指针边界检查：指针相关的安全性检查
+            ConstructCheckHandlers：构造指针边界检查的处理器，可能是设置或初始化与指针边界相关的检查逻辑。
+            PointerBoundaryCheck：检查指针是否超出了预定的边界。
+            PointerAccessCheck：检查指针访问是否合法，可能涉及验证指针是否指向合法的内存区域。
+            ArrayAccessCheck：检查数组访问是否越界。
+            CollectArrayBoundaryInfo：收集与数组边界相关的信息。
+            GetInstIterator：获取指向指定变量的指令迭代器，可能用于定位或遍历指令。
+        */
     void ConstructCheckHandlers(Module &M);
     void PointerBoundaryCheck(Module &M, ValueSet &vs);
     void PointerAccessCheck(Module &M, Value *v);
     void ArrayAccessCheck(Module &M, Value *v);
     void CollectArrayBoundaryInfo(Module &M, Value *v);
     BasicBlock::iterator GetInstIterator(Value *v);
+    /*
+        指针基准和边界处理：这些函数用于处理指针的基址和边界相关的信息。
+            CastToVoidPtr：将指针转换为 void* 类型，通常用于处理通用指针。
+            DissociateBaseBound：解除指针的基地址和边界关联。
+            AssociateBaseBound：将指针与其基地址和边界关联起来。
+            GetAssociatedBase 和 GetAssociatedBound：分别获取与指针关联的基地址和边界。
+            IsStructOperand：判断指针操作数是否为结构体类型。
+            GetSizeOfType：获取给定类型的大小。
+        */
     Value* CastToVoidPtr(Value* operand, Instruction* insert_at);
     void DissociateBaseBound(Value* pointer_operand);
     void AssociateBaseBound(Value* pointer_operand, Value* pointer_base, Value* pointer_bound);
@@ -143,18 +166,44 @@ struct Nova : public ModulePass {
     Value* GetAssociatedBound(Value* pointer_operand);
     bool IsStructOperand(Value* pointer_operand);
     Value* GetSizeOfType(Type* input_type);
+    /*
+        全局变量基址和边界管理：
+            AddBaseBoundGlobalValue：将全局变量与基地址和边界关联。
+            AddBaseBoundGlobals：将模块中的所有全局变量进行基地址和边界的关联。
+            HandleGlobalSequentialTypeInitializer：处理全局变量初始化时涉及的顺序类型。
+        */
     void AddBaseBoundGlobalValue(Module &M, Value *v);
     void AddBaseBoundGlobals(Module &M);
     void HandleGlobalSequentialTypeInitializer(Module& M, GlobalVariable* gv);
+    /*
+        存储、常量和结构体初始化相关处理：
+            AddStoreBaseBoundFunc：将基地址和边界信息添加到存储操作中。
+            GetConstantExprBaseBound：从常量表达式中获取基地址和边界。
+            HandleGlobalStructTypeInitializer：处理全局结构体类型的初始化，涉及结构体类型、初始化常量等信息。
+        */
     void AddStoreBaseBoundFunc(Value* pointer_dest, Value* pointer_base, Value* pointer_bound,
                                  Value* pointer, Value* size_of_type, Instruction* insert_at);
     void GetConstantExprBaseBound(Constant* given_constant, Value* & tmp_base, Value* & tmp_bound);
     void HandleGlobalStructTypeInitializer(Module& M, StructType* init_struct_type, Constant* initializer, 
                                   GlobalVariable* gv, std::vector<Constant*> indices_addr_ptr, int length);
+    /*
+        全局初始化和主函数处理：
+            GetGlobalInitInstruction：获取全局变量的初始化指令。
+            TransformMain：对主函数进行转换，可能是为了引入额外的检查或修改。
+            GatherBaseBoundPass1 和 GatherBaseBoundPass2：两个阶段的处理，可能用于收集和处理函数中的基地址和边界信息。
+        */
     Instruction* GetGlobalInitInstruction(Module& M);
     void TransformMain(Module& module);
     void GatherBaseBoundPass1(Function* func);
     void GatherBaseBoundPass2(Function* func);
+    /*
+        加载、存储和反向引用检查：
+            AddLoadStoreChecks：为加载和存储指令添加检查，确保内存访问安全。
+            AddDereferenceChecks：对函数中的反向引用进行检查。
+            PrepareForBoundsCheck：为边界检查做准备，可能是初始化数据结构或变量。
+            IdentifyFuncToTrans：识别需要转换的函数。
+            CheckIfFunctionOfInterest：检查函数是否是我们关心的目标函数。
+        */
     void AddLoadStoreChecks(Instruction* load_store, std::map<Value*, int>& FDCE_map);
     void AddDereferenceChecks(Function* func, ValueSet &vs);
     void PrepareForBoundsCheck(Module &M, ValueSet &vs);
@@ -197,7 +246,7 @@ struct Nova : public ModulePass {
     // SCC traversal
     //遍历模块
     void Traversal(GlobalStateRef gs, Function *f);
-    /*反转强联通分量 */
+    //给定一个函数，反转并返回该函数的强联通图
     void ReverseSCC(std::vector<SCCRef> &, Function *f);
     void VisitSCC(GlobalStateRef gs, SCC &scc); 
     //处理循环
