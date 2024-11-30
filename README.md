@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Prototype for OAT: Attesting Operation Integrity of Embedded Devices
 
 This repository is a prototype implementation for our paper [OAT: Attesting Operation Integrity of Embedded Devices(Oakland'20)][1]. It contains the OAT Compiler (`oat-llvm40`), the OAT Trampoline Library (`oat-trampoline-lib`), the OAT Measurement Engine (`oat-measurement-engine-ta`), the OAT Verify Engine (`oat-verify-engine`), evaluation examples (`oat-evaluation`), and a few test programs for the OAT compiler (`oat-test`). 
