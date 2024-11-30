@@ -1,17 +1,15 @@
-//==- CollectCondBranchHints.cpp - Collect Conditional Branch Hints for CFV ------------------===//
+//==- CollectCondBranchHints.cpp - 为控制流验证收集条件分支提示 ------------------===//
 //
-//                     The LLVM Compiler Infrastructure
+//                     LLVM 编译器基础设施
 //
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// 本文件根据伊利诺伊大学开源许可协议发布。详情请参见 LICENSE.TXT。
 //
 //===----------------------------------------------------------------------===//
-// This pass is in cooperation with the Control-Flow Verification pass for
-// AArch64 backend. In order to provide hints info for Verifier to quickly
-// verify the control-flow HASH value, we need to collect hints info for
-// every conditional branch, using 1 bit to record basically the taken or
-// not taken info.
+// 该 Pass 与 AArch64 后端的控制流验证（Control-Flow Verification） Pass 协作。
+// 为了提供提示信息，使得验证器能够快速验证控制流的哈希值，我们需要为
+// 每个条件分支收集提示信息，使用 1 位来记录基本的“已采取”或“未采取”信息。
 //===----------------------------------------------------------------------===//
+
 
 #include "llvm/Pass.h"
 #include <string>

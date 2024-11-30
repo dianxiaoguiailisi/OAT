@@ -383,42 +383,30 @@ bool Nova::SkipStructType(Type *type) {
 }
 
 void Nova::InitializeGS(GlobalStateRef gs, Module &M) {
-    GlobalValue *gv;
+    GlobalValue *gv;//全局变量
     Type *type = NULL;
     AliasObjectRef aor = NULL;
     AliasObjectTupleRef aot = NULL;
     TupleSet *ts = NULL;
     InstSet *is = NULL;
-
-    //errs() <<__func__<<" : \n";
-
-    for (Module::global_iterator s = M.global_begin(), 			\
-          e = M.global_end(); s != e; ++s) {
+    /*遍历模块 M 中的所有全局变量:
+        global_iterator 是用于遍历模块中所有全局变量的迭代器。*/
+    for (Module::global_iterator s = M.global_begin(),e = M.global_end(); s != e; ++s) {
         gv = &(*s);
 
-	// filter out .str***, stderr
-	//if (SkipGlobalValue(gv))
-	//	continue;
-
-        type = gv->getType();
-        //errs() << "GlobalValue gv typeID: " << type->getTypeID() << "\n";
-        //errs() << "GlobalValue gv pointee typeID: " << type->getPointerElementType()->getTypeID() << "\n";
-
-        aor = CreateAliasObject(type->getPointerElementType(), gv);
-
-        // create alias object tuple
+        type = gv->getType();//获得gv类型
+        aor = CreateAliasObject(type->getPointerElementType(), gv);//创建gv别名 对象
+        //创建别名对象元组
         aot = new struct AliasObjectTuple();
         aot->offset = 0;
         aot->ao = aor;
-
-        // create tuple set
+        //元组集合
         ts = new TupleSet();
         ts->insert(aot);
-
-        // add ele into points to map
+        //将别名对象（这里只是分配了空间）插入
         (*(gs->pMap))[gv] = ts;
 
-        // initialize global taint map
+        // 初始化全局污点map
         is = new InstSet();
         (*(gs->tMap))[gv] = is;
     }
@@ -453,8 +441,10 @@ uint32_t Nova::LongestUseDefChain(SCC &scc) {
 }
 
 void Nova::HandleLoop(GlobalStateRef gs, SCC &scc) {
-    uint32_t i, numRuns = LongestUseDefChain(scc);//uint32_t i无符号32位整数，numRuns是使用-定义的最大长度
+    uint32_t i, numRuns = LongestUseDefChain(scc);//uint32_t i无符号32位整数，numRuns是使用-定义的最大长度（循环次数）
     i = 0;
+    //多次遍历强联通分量：遍历一次SCC相当于一次循环
+    //强联通分量基本块是一次循环的基本块！！！
     while (i < numRuns) {
         //errs() << "SCC: ";
         VisitSCC(gs, scc);
@@ -492,7 +482,7 @@ void Nova::InitializeFunction(GlobalStateRef gs, Function *f, CallInst &I) {
     */
     CallInst::op_iterator argit = I.arg_begin(), argie = I.arg_end();
     Function::arg_iterator it = f->arg_begin(), ie = f->arg_end();
-    /**/
+    /*实参与形参之间状态传递*/
     for (;(argit != argie) && (it != ie); ++it, ++argit) {
         var = cast<Value>(&(*it));
 
@@ -1404,7 +1394,7 @@ void Nova::UpdateTaintBitCast(GlobalStateRef gs, Instruction &I){
 
     (*(gs->tMap))[bci] = is;
 }
-/*点对点分析主要用于跟踪指针变量在程序中的指向关系，帮助分析哪些变量或内存地址可能被某些指针引用*/
+/*对指针进行点对点分析；主要用于跟踪指针变量在程序中的指向关系，帮助分析哪些变量或内存地址可能被某些指针引用*/
 void Nova::PointsToAnalysis(GlobalStateRef gs, Instruction &I) {
     if (isa<AllocaInst>(&I)) {//用于在栈上分配内存
         UpdatePtoAlloca(gs, I);
@@ -1425,7 +1415,7 @@ void Nova::PointsToAnalysis(GlobalStateRef gs, Instruction &I) {
         //errs() <<"Unhandled Inst: "<<I<<"\n";
     }
 }
-
+/*对污点数据进行分析：*/
 void Nova::TaintAnalysis(GlobalStateRef gs, Instruction &I) {
     if (isa<AllocaInst>(&I)) {
         UpdateTaintAlloca(gs, I);
@@ -1448,10 +1438,10 @@ void Nova::TaintAnalysis(GlobalStateRef gs, Instruction &I) {
 }
 //进入指向分析和污点分析
 void Nova::DispatchClients(GlobalStateRef gs, Instruction &I) {
-    PointsToAnalysis(gs, I);
-    TaintAnalysis(gs, I);
+    PointsToAnalysis(gs, I);//分析指针
+    TaintAnalysis(gs, I);//分析除去指针以外的敏感数据的使用
 }
-
+/*遍历基本块*/
 void Nova::VisitSCC(GlobalStateRef gs, SCC &scc) {/*gs:全局状态；scc：当前的强联通图*/
     //遍历当前强联通图中的每一个基本块
     for (SCC::iterator BBI = scc.begin(),BBIE = scc.end();BBI != BBIE; ++BBI) {
@@ -1476,7 +1466,7 @@ void Nova::Traversal(GlobalStateRef gs, Function *f) {/*gs:全局状态；f：�
     for (std::vector<SCCRef>::iterator it = sccVector.begin(), ie = sccVector.end();it != ie; ++it) {
         if ((*it)->size() > 1) {//检测当前强联通分量是否包含多个基本块，从而判断是否存在循环
             HandleLoop(gs, *(*it));
-        } else {//不是循环
+        } else {//强联通分量为1，意味着只有一个基本块
             //errs() << "SCC: ";
             VisitSCC(gs, *(*it));
             //errs() << "\n";

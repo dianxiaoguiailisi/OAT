@@ -106,7 +106,7 @@ struct AliasObjectTuple {
         PointsToMapRef：不同value对应的别名元集合
         VisitMapRef：是否遍历过
         CallInst：当前的调用指令
-        ValueSet：value集合
+        ValueSet：敏感value集合
     */
 struct GlobalState {
     TaintMapRef tMap;
