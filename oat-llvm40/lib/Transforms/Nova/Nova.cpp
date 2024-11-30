@@ -1447,7 +1447,7 @@ void Nova::TaintAnalysis(GlobalStateRef gs, Instruction &I) {
         //errs() <<"Unhandled Inst: "<<I<<"\n";
     }
 }
-
+//进入指向分析和污点分析
 void Nova::DispatchClients(GlobalStateRef gs, Instruction &I) {
     PointsToAnalysis(gs, I);
     TaintAnalysis(gs, I);
