@@ -1,8 +1,8 @@
 # Prototype for OAT: Attesting Operation Integrity of Embedded Devices
 
-This repository is a prototype implementation for our paper [OAT: Attesting Operation Integrity of Embedded Devices(Oakland'20)][1]. It contains the OAT Compiler (`oat-llvm40`), the OAT Trampoline Library (`oat-trampoline-lib`), the OAT Measurement Engine (`oat-measurement-engine-ta`), the OAT Verify Engine (`oat-verify-engine`), evaluation examples (`oat-evaluation`), and a few test programs for the OAT compiler (`oat-test`). 
+该存储库是我们论文 [OAT：证明嵌入式设备的操作完整性 (Oakland'20)][1] 的原型实现。它包含 OAT 编译器 ( `oat-llvm40`)、OAT Trampoline 库 ( `oat-trampoline-lib`)、OAT 测量引擎 ( `oat-measurement-engine-ta`)、OAT 验证引擎 ( `oat-verify-engine`)、评估示例 ( `oat-evaluation`) 以及一些 OAT 编译器的测试程序 ( `oat-test`)。
 
-OAT is an end-to-end remote attestation system that allows a verifier to attest the `control-flow integrity` and `critical data integrity` of a critical operation on a prover, which is usually a remotely deployed embedded device. You can check out our conference talk [here](https://www.youtube.com/watch?v=yxS5AoyszP8). The OAT system architecture is shown as below:
+OAT 是一个端到端的远程认证系统，允许验证者在证明者（通常是远程部署的嵌入式设备）上证明关键操作的`control-flow integrity`有效性。您可以[在此处](https://www.youtube.com/watch?v=yxS5AoyszP8)`critical data integrity`查看我们的会议演讲。OAT 系统架构如下所示
 
 ![OAT system](./oat-sys.png)
 
