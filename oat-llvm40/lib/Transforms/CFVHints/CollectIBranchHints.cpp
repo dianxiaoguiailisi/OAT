@@ -1,30 +1,24 @@
-//===- CollectIBranchHints.cpp - Collect Indirect Branch Hints ------------===//
+//===- CollectIBranchHints.cpp - 收集间接分支提示 ------------===//
 //
-//                     The LLVM Compiler Infrastructure
+//                     LLVM 编译器基础设施
 //
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// 本文件按照伊利诺伊大学开放源代码许可证分发。详细信息请参阅 LICENSE.TXT 文件。
 //
 //===----------------------------------------------------------------------===//
-// This pass is in cooperation with the Control-Flow Verification pass for
-// AArch64 backend. In order to provide hints info for Verifier to quickly
-// verify the control-flow HASH value, we need to collect hints info for
-// those control-flow event that might cause path explosion. Among them, loop
-// is the chief culprit of the path explosion. Indirect calls/branches are
-// also a uncertain part for building CFG. We will handle indirect branches in
-// this pass.
+// 该 pass 与 AArch64 后端的控制流验证 pass 协作。
+// 为了为验证器提供快速验证控制流哈希值的提示信息，我们需要收集那些可能导致路径爆炸的控制流事件的提示信息。
+// 其中，循环是路径爆炸的主要原因。间接调用/分支也是构建控制流图时的不确定部分。
+// 我们将在这个 pass 中处理间接分支。
 //
-// TODO : Theoretically, we only need to instrument those indirect branches 
-// that has it has many or uncertain amount of possible target addresses.
-// However, that needs more analysis to assist our selection. As a initial
-// version, we provide a framework for indirect branches hints collection,
-// where we treat all indirect branches uniformly.
+// TODO：理论上，我们只需要对那些具有许多或不确定目标地址的间接分支进行插装。
+// 但是，这需要更多的分析来辅助选择。作为初步版本，我们为间接分支提示收集提供了一个框架，
+// 其中我们将所有间接分支统一处理。
 //
-// For every indirect branches, we record the following info
-// triple <mother-function-id, possible-target-id>.
-//   mother-function-id: the function that holds the indirect function call
-//   ibranch-cite-count:
-//   target-address:
+// 对于每个间接分支，我们记录以下信息：
+// 三元组 <母函数ID, 可能目标ID>。
+//   母函数ID：包含间接函数调用的函数。
+//   ibranch-cite-count：
+//   目标地址：
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Pass.h"
@@ -45,7 +39,7 @@ typedef std::map<std::string, int> FunctionMap;
 namespace {
 struct  CollectIBranchHints : public FunctionPass {
   static char ID;
-  static FunctionMap *fMap;
+  static FunctionMap *fMap;//存储了函数名到函数 ID 的映射
   static int FID;
 
   CollectIBranchHints() : FunctionPass(ID) {}
@@ -60,61 +54,69 @@ bool CollectIBranchHints::runOnFunction(Function &F) {
   int fid;
   int count = 0;
 
-  // check whether we have visit this function before
+  // 判断是否插桩过该函数
   if (fMap->find(name) != fMap->end()) {
-      (*fMap)[name] = ++FID; 
+      (*fMap)[name] = ++FID; //每次遇到一个新的函数，赋予新的ID
   }
 
-  fid = (*fMap)[name];
-
+  fid = (*fMap)[name];//获取函数ID
+  //遍历每一个基本块
   for (auto &BB : F) {
-    //errs() << "runOnFunction basicblock name: " << BB.getName() << "\n";
-
-    if (IndirectBrInst *IBI = dyn_cast<IndirectBrInst>(BB.getTerminator())) {  
-      modified |= instrumentIBranch(IBI, fid, count);
-
+    /*
+      BB.getTerminator():获得每一个基本块的终止指令（最后一条指令【控制流指令】）
+      dyn_cast<A>(B)将B转换为A类型，若成功返回该指针；失败返回nullptr
+      按位或赋值：A |= B 等价于 A = A | B
+      */
+    if (IndirectBrInst *IBI = dyn_cast<IndirectBrInst>(BB.getTerminator())) {//若是间接指令
+      modified |= instrumentIBranch(IBI, fid, count);//进行插桩，IBI：间接指令;fid:函数ID；count:插桩数量
       /* label the indirect branch cites in this function */
       count++;
     }
   }
-
   return modified;
 }
-
+/*
+  instrumentIBranch:插桩函数：
+    I:插桩指令；
+    fid:函数ID；
+    count:插桩的数量；
+*/
 bool CollectIBranchHints::instrumentIBranch(Instruction *I, int fid, int count) {
-    IRBuilder<> B(I);
-    Module *M = B.GetInsertBlock()->getModule();
-    Type *VoidTy = B.getVoidTy();
-    Type *I64Ty = B.getInt64Ty();
-    ConstantInt *constFid, *constCount;
-    Value *target;
-    Value *castVal;
+    IRBuilder<> B(I);//指明插入指令的位置（I之后）
+    Module *M = B.GetInsertBlock()->getModule();//获得当前模块M
+    Type *VoidTy = B.getVoidTy();//获得void类型
+    Type *I64Ty = B.getInt64Ty();//获得int类型
+    ConstantInt *constFid, *constCount;//函数ID，分支计数
+    Value *target;//存储间接分支指令的目标地址指针
+    Value *castVal;// 存储转换【整数类型（i64 类型）】的目标地址，传递给需要整数参数的函数
 
     errs() << __func__ << " : "<< *I<< "\n";
     errs() << __func__ << " fid : "<< fid << " count: " << count << "\n";
-
+    //判断是否是间接指令
     if (auto *indirectBranchInst = dyn_cast<IndirectBrInst>(I)) {
       target = indirectBranchInst->getAddress();
-    } else {
+    } else {//不是直接返回false
       errs() << __func__ << "ERROR: unknown indirect branch inst: "<< *I<< "\n";
       return false;
     }
-
+    //再次确保目标指令指针不为空
     assert(target != nullptr);
-
-    Constant *ConstCollectIBranchHints= M->getOrInsertFunction("__collect_ibranch_hints", VoidTy,
-                                                                     I64Ty,
-                                                                     I64Ty, 
-                                                                     I64Ty, 
-                                                                     nullptr);
-
+    
+    Constant *ConstCollectIBranchHints= M->getOrInsertFunction("__collect_ibranch_hints",//外部函数名
+                                                                    VoidTy,//返回类型
+                                                                     I64Ty,//第一个参数类型
+                                                                     I64Ty, //第二个参数类型
+                                                                     I64Ty, //第三个参数类型
+                                                                     nullptr);//可选属性
+      //将之前插入的外部函数声明转换为 Function 类型指针
     Function *FuncCollectIBranchHints= cast<Function>(ConstCollectIBranchHints);
+    //创建常量整数（ConstantInt）来表示 fid 和 count
     constFid = ConstantInt::get((IntegerType*)I64Ty, fid);
     constCount = ConstantInt::get((IntegerType*)I64Ty, count);
+    //将间接分支指令的目标地址从指针类型转换为整数类型（i64）
     castVal = CastInst::Create(Instruction::PtrToInt, target, I64Ty, "ptrtoint", I);
-
+    //CreateCall(插入函数指针，{参数列表})
     B.CreateCall(FuncCollectIBranchHints, {constFid, constCount, castVal});
-
     return true;
 }
 

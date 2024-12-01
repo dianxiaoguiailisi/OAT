@@ -1,31 +1,26 @@
-//===- CollectICallHints.cpp - Collect Indirect Call hints ----------------===//
+```cpp
+//===- CollectICallHints.cpp - 收集间接调用提示 ----------------===//
 //
-//                     The LLVM Compiler Infrastructure
+//                     LLVM 编译器基础设施
 //
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// 本文件依据伊利诺伊大学开源许可证发布。详情见 LICENSE.TXT。
 //
 //===----------------------------------------------------------------------===//
-// This pass is in cooperation with the Control-Flow Verification pass for
-// AArch64 backend. In order to provide hints info for Verifier to quickly
-// verify the control-flow HASH value, we need to collect hints info for
-// those control-flow event that might cause path explosion. Among them, loop
-// is the chief culprit of the path explosion. Indirect calls are also a
-// uncertain part for building CFG. We will handle indirect calls in this 
-// pass.
+// 本 Pass 与 AArch64 后端的控制流验证 Pass 配合工作。为了提供提示信息，
+// 使验证器能够快速验证控制流哈希值，我们需要收集可能导致路径爆炸的控制流事件的提示信息。
+// 其中，循环是导致路径爆炸的主要元凶。间接调用也是构建控制流图时一个不确定的部分。
+// 本 Pass 将处理间接调用。
 //
-// TODO : Theoretically, we only need to instrument those indirect calls
-// that has it has many or uncertain amount of possible target functions.
-// However, that needs more analysis to assist our selection. As a initial
-// version, we provide a framework for indirect call hints collection, where
-// we treat all indirect call uniformly.
+// TODO：理论上，我们只需要对那些可能有多个或不确定目标函数的间接调用进行插桩。
+// 但是，这需要更多的分析来辅助我们的选择。作为初步版本，我们为间接调用提示收集提供了一个框架，
+// 在这个框架中，我们将所有间接调用统一处理。
 //
-// For every indirect call, we record the following info
-// triple <mother-function-id, possible-target-id>.
-//   mother-function-id: the function that holds the indirect function call
-//   icall-cite-count: the label of this indirect call instruction in mother func.
-//   target-function-addr: the actual target function address at runtime. 
-//===----------------------------------------------------------------------===//
+// 对于每一个间接调用，我们记录以下信息：
+// 三元组 <母函数 ID，可能的目标函数 ID>。
+//   母函数 ID：包含间接调用的函数。
+//   icall-cite-count：母函数中该间接调用指令的标签。
+//   target-function-addr：在运行时实际的目标函数地址。
+```
 
 #include "llvm/Pass.h"
 #include <string>

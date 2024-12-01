@@ -1,31 +1,24 @@
-//==- CollectLoopHints.cpp - Collect Loop Hints for CFV ------------------===//
+```cpp
+//==- CollectLoopHints.cpp - 收集控制流验证的循环提示 ------------------===//
 //
-//                     The LLVM Compiler Infrastructure
+//                     LLVM 编译器基础设施
 //
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// 本文件依据伊利诺伊大学开源许可证发布。详情见 LICENSE.TXT。
 //
 //===----------------------------------------------------------------------===//
-// This pass is in cooperation with the Control-Flow Verification pass for
-// AArch64 backend. In order to provide hints info for Verifier to quickly
-// verify the control-flow HASH value, we need to collect hints info for
-// those control-flow event that might cause path explosion. Among them, loop
-// is the chief culprit of the path explosion. Indirect calls are also a
-// uncertain part for building CFG. We will handle indirect calls in other
-// passes.
+// 本 Pass 与 AArch64 后端的控制流验证 Pass 配合工作。为了提供提示信息，
+// 使验证器能够快速验证控制流哈希值，我们需要收集可能导致路径爆炸的控制流事件的提示信息。
+// 其中，循环是导致路径爆炸的主要元凶。间接调用也是构建控制流图时一个不确定的部分。
+// 本 Pass 将处理间接调用，在其他 Pass 中处理。
 //
-// TODO : Theoretically, we only need to instrument those loops that has a
-// indirect jump or indirect call inside its body. However, function calls
-// and jump instructions inside loop may make it difficult to make the choice,
-// so this initial version will instrument all loops.
+// TODO：理论上，我们只需要对那些体内含有间接跳转或间接调用的循环进行插桩。
+// 然而，循环内的函数调用和跳转指令可能使得选择变得困难，因此这个初步版本将对所有循环进行插桩。
 //
-// For every loop inside a function will be assigned a label, which is a 
-// triple <function-name, loop-count, loop-level>.
-//   function-name: we may collect function name info and assign an id to it.
-//   loop-count: for loops at the same level, they are assigned a count.
-//   loop-level: loop might be nested, so we need a level number to distinguish
-//               loops at different level.
-//===----------------------------------------------------------------------===//
+// 对于函数中的每个循环，将会分配一个标签，标签为三元组 <函数名，循环计数，循环层级>。
+//   函数名：我们可能会收集函数名信息，并为其分配一个 ID。
+//   循环计数：对于相同层级的循环，分配一个计数值。
+//   循环层级：循环可能是嵌套的，因此需要一个层级编号来区分不同层级的循环。
+```
 
 #include "llvm/Pass.h"
 #include <string>
