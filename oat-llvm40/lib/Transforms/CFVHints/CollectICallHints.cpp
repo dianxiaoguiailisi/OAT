@@ -41,23 +41,39 @@ typedef std::map<std::string, int> FunctionMap;
 namespace {
 struct  CollectICallHints : public ModulePass {
   static char ID;
-  static FunctionMap *fMap;
+  static FunctionMap *fMap;//函数名与函数ID
   static int FID;
 
   CollectICallHints() : ModulePass(ID) {}
+  /*
+    runOnModule: LLVM 模块级优化或分析 Pass 的入口函数（程序执行的起始位置类似于main）
+                参数：Module &M：模块
+                返回值：bool：判断是否修改
+    */
   bool runOnModule(Module &M) override;
+  /*
+    processFunction:函数初始化工作、遍历M中的间接调用
+                参数：Function &F：函数
+                返回值：bool:判断是否修改
+    */
   bool processFunction(Function &);
+  /*
+    instrumentICall:插桩函数
+              参数：Instruction *I：需要插桩的指令；int fid：函数ID； int count:已经插装函数的数量
+              返回值：bool:判断是否修改
+
+    */
   bool instrumentICall(Instruction *I, int fid, int count);
 };
 } // end of namespace
 
 bool CollectICallHints::runOnModule(Module &M) {
   bool modified = false;
-  for (auto &F : M) {
+  for (auto &F : M) {//遍历模块M的每一个函数
     //errs() << "runOnModule function name: " << F.getName() << "\n";
-    if (F.isDeclaration())
+    if (F.isDeclaration())//只声明没有实现跳过
       continue;
-    if (F.hasFnAttribute(Attribute::OptimizeNone)) /* TODO:need further check */
+    if (F.hasFnAttribute(Attribute::OptimizeNone)) /* 函数 F 有 OptimizeNone 属性（表示此函数不进行优化） */
       continue;
     modified |= CollectICallHints::processFunction(F);
   }
@@ -68,11 +84,11 @@ bool CollectICallHints::runOnModule(Module &M) {
 bool CollectICallHints::processFunction(Function &F) {
   bool modified = false;
   std::string name = F.getName().str();
-  int fid;
+  int fid;//存储函数ID
   int count = 0;
 
-  // check whether we have visit this function before
-  if (fMap->find(name) != fMap->end()) {
+  //函数是否已经访问过
+  if (fMap->find(name) != fMap->end()) {//避免为相同函数重复使用相同的 ID
       (*fMap)[name] = ++FID; 
   }
 
@@ -80,7 +96,7 @@ bool CollectICallHints::processFunction(Function &F) {
 
   errs() << "process function: " << F.getName() << "\n";
 
-  for (auto &I : findIndirectCallSites(F)) {
+  for (auto &I : findIndirectCallSites(F)) {//遍历函数F中的所有间接调用
     modified |= instrumentICall(I, fid, count);
 
     /* label the indirect call cites in this function */
@@ -89,42 +105,58 @@ bool CollectICallHints::processFunction(Function &F) {
 
   return modified;
 }
+/*间接调用指令A；      A调用的目标地址：targeFunc；
+  插桩的调用指令B；    B调用的目标地址：插入函数 __collect_icall_hints 的地址*/
 
 bool CollectICallHints::instrumentICall(Instruction *I, int fid, int count) {
-    IRBuilder<> B(I);
-    Module *M = B.GetInsertBlock()->getModule();
+    /*初始化B的参数 */
+    IRBuilder<> B(I);//声明被插桩位置：I
+    Module *M = B.GetInsertBlock()->getModule();//获得插桩位置的基本块属于的Modul
     Type *VoidTy = B.getVoidTy();
     Type *I64Ty = B.getInt64Ty();
     ConstantInt *constFid, *constCount;
-    Value *targetFunc;
-    Value *castVal;
+    Value *targetFunc;//A的目标函数指针
+    Value *castVal;//存储将指针类型C转换为整数类型[地址]的值
 
     errs() << __func__ << " : "<< *I<< "\n";
     errs() << __func__ << " fid : "<< fid << " count: " << count << "\n";
 
-    if (auto *callInst = dyn_cast<CallInst>(I)) {
+    //判断A的调用类型,并存储A的目标函数指针：targetFunc
+    if (auto *callInst = dyn_cast<CallInst>(I)) {//普通调用函数
       targetFunc = callInst->getCalledValue();
-    } else if (auto *invokeInst = dyn_cast<InvokeInst>(I)) {
+    } else if (auto *invokeInst = dyn_cast<InvokeInst>(I)) {//携带异常处理的调用指令
       targetFunc = invokeInst->getCalledValue();
     } else {
       errs() << __func__ << "ERROR: unknown call inst: "<< *I<< "\n";
       return false;
     }
 
-    assert(targetFunc != nullptr);
+    assert(targetFunc != nullptr);//再次检查目标函数指针是否为空
 
-    Constant *ConstCollectICallHints= M->getOrInsertFunction("__collect_icall_hints", VoidTy,
-                                                                     I64Ty,
-                                                                     I64Ty, 
-                                                                     I64Ty, 
+    /*下面都是初始化插桩的调用指令B，并插桩指令B*/
+
+    //B的目的地址：B调用的插桩函数
+    //M->getOrInsertFunction:查找并返回一个指定名称和签名的函数，并返回常量函数
+    Constant *ConstCollectICallHints= M->getOrInsertFunction("__collect_icall_hints", //函数名
+                                                                    VoidTy,//返回类型
+                                                                     I64Ty,//参数
+                                                                     I64Ty, //参数
+                                                                     I64Ty, //参数
                                                                      nullptr);
-
-    Function *FuncCollectICallHints= cast<Function>(ConstCollectICallHints);
+    Function *FuncCollectICallHints= cast<Function>(ConstCollectICallHints);//常量指针（Constant*）转换为 Function* 类型的指针
+    //参数：
     constFid = ConstantInt::get((IntegerType*)I64Ty, fid);
     constCount = ConstantInt::get((IntegerType*)I64Ty, count);
-    castVal = CastInst::Create(Instruction::PtrToInt, targetFunc, I64Ty, "ptrtoint", I);
+      //
+    castVal = CastInst::Create(Instruction::PtrToInt, //一种类型转换操作(指针类型转换为整数类型)
+                                          targetFunc,//待转换的值【目标函数的指针（一个内存地址）】
+                                               I64Ty, //64位整数类型
+                                          "ptrtoint", //
+                                                  I);//插入位置
 
-    B.CreateCall(FuncCollectICallHints, {constFid, constCount, castVal});
+    //插入函数调用指令B：用于调用函数 FuncCollectICallHints 并传递参数
+    B.CreateCall(FuncCollectICallHints/*目的地址：插桩函数*/, 
+                {constFid, constCount, castVal}/*{插桩函数参数}*/);
 
     return true;
 }
