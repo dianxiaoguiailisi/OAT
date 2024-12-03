@@ -1,3 +1,8 @@
+/*
+	这个代码片段是一个在 OP-TEE中与 CFV相关的程序。
+	它实现了与 TA交互的功能，用于收集控制流验证（CFV）相关的数据，并通过性能计数器监控世界切换的开销。
+	具体功能涉及在安全世界（OP-TEE中的受信执行环境）和普通世界（正常操作系统环境）之间交换数据，进行控制流的验证和数据记录。
+	*/
 #include "cfv_bellman.h"
 #include <stdio.h>
 #include <string.h>
@@ -10,22 +15,22 @@
 #include <sys/mman.h>
 #include <time.h>
 
-/* OP-TEE TEE client API (built by optee_client) */
+/* OP-TEE TEE 客户端 API（由 optee_client 构建）"*/
 #include "tee_client_api.h"
 
-/* To the the UUID (found the the TA's h-file(s)) */
+/* "用于获取 UUID（可以在 TA 的头文件中找到）"*/
 #include "hello_world_ta.h"
 
 /* Normal world API */
-TEEC_Context ctx;
-TEEC_Session sess;
-TEEC_Operation op;
+TEEC_Context ctx;//与 TEE上下文的交互。它通常包含了有关 TEE 会话的信息
+TEEC_Session sess;//与 TEE 中的 Trusted Application进行的会话。这个会话可以用于执行命令并与 TA 交换数据
+TEEC_Operation op;//定义了一个 TEEC_Operation 类型的变量 op，用于表示在与 TA 交互时传递的操作参数。这个结构体包含了调用 TA 时所需要的参数。
 
 bool cfv_start = false;
 
 /* hints related */
-char hints_file[64] = "hints.txt";
-FILE *hfp = NULL;
+char hints_file[64] = "hints.txt";//用于存储文件名的字符数组
+FILE *hfp = NULL;//一个文件指针
 
 /**
  * for control event:(noly return event)
@@ -50,20 +55,21 @@ FILE *hfp = NULL;
 //	uint64_t b;
 //} cfv_event_t;
 
+/*在出现错误时打印错误消息并退出程序*/
 void errx(const char *msg, TEEC_Result res);
 void errx(const char *msg, TEEC_Result res)
 {
 	fprintf(stderr, "%s: 0x%08x", msg, res);
 	exit (1);
 }
-
+/*检查函数调用的返回值 res 是否为 TEEC_SUCCESS，如果不是，则调用 errx 函数输出错误信息并退出程序*/
 void check_res(TEEC_Result res, const char *errmsg);
 void check_res(TEEC_Result res, const char *errmsg)
 {
 	if (res != TEEC_SUCCESS)
 		errx(errmsg, res);
 }
-
+/*初始化 OP-TEE 客户端 API 的上下文并打开与特定受信执行环境（TA）的会话*/
 void open_ta(void);
 void open_ta(void)
 {
@@ -78,7 +84,7 @@ void open_ta(void)
 			       NULL, &err_origin);
 	check_res(res,"TEEC_OpenSession");
 }
-
+/*关闭TEE客户端*/
 void close_ta(void);
 void close_ta(void) {
 	TEEC_CloseSession(&sess);

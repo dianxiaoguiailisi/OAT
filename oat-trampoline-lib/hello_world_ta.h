@@ -1,29 +1,20 @@
 /*
- * Copyright (c) 2016, Linaro Limited
- * All rights reserved.
+ * 版权所有 (c) 2016, Linaro 有限公司
+ * 保留所有权利。
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ * 在符合以下条件的前提下，允许以源代码和二进制形式进行再分发和使用，无论是修改过还是未修改过：
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- * this list of conditions and the following disclaimer.
+ * 1. 源代码的再分发必须保留上述版权声明、此条件列表和以下免责声明。
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- * this list of conditions and the following disclaimer in the documentation
- * and/or other materials provided with the distribution.
+ * 2. 二进制形式的再分发必须在分发的文档和/或其他材料中复制上述版权声明、此条件列表和以下免责声明。
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * 本软件由版权持有人和贡献者“按原样”提供，不提供任何明示或暗示的担保，包括但不限于
+ * 对适销性和特定用途适用性的默示担保。在任何情况下，版权持有人或贡献者均不对因使用本软件
+ * 而导致的任何直接、间接、附带、特殊、示范性或后果性损害（包括但不限于购买替代商品或服务；
+ * 使用、数据或利润的损失；或业务中断）承担责任，无论是基于合同、严格责任，还是侵权（包括过失或其他）
+ * 理论，也不管是否已被告知发生此类损害的可能性。
  */
+
 #ifndef TA_HELLO_WORLD_H
 #define TA_HELLO_WORLD_H
 

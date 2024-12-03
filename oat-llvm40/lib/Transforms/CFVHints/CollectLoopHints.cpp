@@ -1,5 +1,4 @@
-```cpp
-//==- CollectLoopHints.cpp - 收集控制流验证的循环提示 ------------------===//
+// ==- CollectLoopHints.cpp - 收集控制流验证的循环提示 ------------------===//
 //
 //                     LLVM 编译器基础设施
 //
@@ -18,7 +17,7 @@
 //   函数名：我们可能会收集函数名信息，并为其分配一个 ID。
 //   循环计数：对于相同层级的循环，分配一个计数值。
 //   循环层级：循环可能是嵌套的，因此需要一个层级编号来区分不同层级的循环。
-```
+
 
 #include "llvm/Pass.h"
 #include <string>
@@ -43,7 +42,7 @@ using namespace llvm;
 
 typedef std::map<std::string, int> FunctionMap;
 
-// Make it configurable whether or not to instrument the loop.
+// 使用 cl::opt 定义了一个命令行选项 collect-loop-hints，可以控制是否启用循环提示收集功能，默认为 true。
 static cl::opt<bool> CollectLoopHintsInfo("collect-loop-hints", cl::Hidden,
                                   cl::init(true));
 
@@ -57,62 +56,68 @@ struct  CollectLoopHints : public FunctionPass {
   LoopInfo *LI = nullptr;
 
   CollectLoopHints() : FunctionPass(ID) {};
-
+  // 获取循环的头部基本块并调用 instrumentLoopHeader 在循环头部插入一个函数调用，记录循环的 ID、层级和计数。
   bool runOnLoop(Loop *, int, int, int);
+
+  // 递归地遍历循环及其子循环，对每个循环调用 runOnLoop 进行处理。
+  //递归到循环的最底层（最内层的子循环），处理完最底层的循环之后，再逐层返回，处理上一层的循环
   bool runOnLoopAndSubLoops(Loop *L, int fid, int level, int count) {
     bool modified = false;
     int localCount = 0;
 
-    // Visit all the subloops
+    // 遍历当前循环L的素有子循环
+    //*L解引用：获得循环对象的子循环列表
+    //每次循环，I 都会指向一个子循环
     for (Loop *I : *L) {
+      //level + 1 表示子循环的嵌套层级比父循环高 1
       modified |= runOnLoopAndSubLoops(I, fid, level + 1, localCount);
       localCount++;
     }
-    modified |= runOnLoop(L, fid, level, count);
+    //结束子循环遍历
+    modified |= runOnLoop(L, fid, level, count);//处理当前循环
 
     return modified;
   }
-
+//针对每个函数进行操作的 Pass
   bool runOnFunction(Function &F) override {
-    LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
+    LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();//获取当前函数中的循环信息，并将其赋值给 LI
     std::string name = F.getName().str();
     int count = 0;
     int fid;
 
-    // check whether we have visit this function before
+    // 检查 fMap是否已经包含当前函数名
     if (fMap->find(name) != fMap->end()) {
-	(*fMap)[name] = ++FID; 
+	        (*fMap)[name] = ++FID; 
     }
 
     fid = (*fMap)[name];
-
+    // 遍历当前函数中的所有循环（通过 LoopInfo）。对于每一个I，调用 runOnLoopAndSubLoops 递归地遍历该循环和所有子循环，并对每个循环进行处理
     for (Loop *I : *LI) {
       Modified |= runOnLoopAndSubLoops(I, fid, /*initial level*/0, count);
       count++;
     }
     return Modified;
   }
-
+  //表明这个 Pass 需要依赖 LoopInfoWrapperPass 来分析循环信息
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<LoopInfoWrapperPass>();
     // We need to modify IR, so we can't indicate AU to preserve analysis results. 
     // AU.setPreservesAll();
   }
-
+  //插桩函数
   bool instrumentLoopHeader(Instruction *I, int fid, int level, int count);
 
 };
 } // end of namespace
 
 bool CollectLoopHints::runOnLoop(Loop *L, int fid, int level, int count) {
-  // TODO: do instrumentation later
-  BasicBlock *Header = L->getHeader();
-  Instruction *I = &(*(Header->begin()));
+  BasicBlock *Header = L->getHeader();//获取当前循环的头部基本块
+  Instruction *I = &(*(Header->begin()));//获取循环头部基本块的第一条指令
   bool modified;
 
   NumOfAffectedLoops++;
 
-  modified = instrumentLoopHeader(I, fid, level, count);
+  modified = instrumentLoopHeader(I, fid, level, count);//插桩
 
   errs() << __func__ << "function id: " << fid << " level: " << level << " count: " << count << "\n";
   errs() << "header : " << Header->getName() << "\n";

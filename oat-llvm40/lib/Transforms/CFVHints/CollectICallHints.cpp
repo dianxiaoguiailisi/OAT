@@ -87,7 +87,7 @@ bool CollectICallHints::processFunction(Function &F) {
   int fid;//存储函数ID
   int count = 0;
 
-  //函数是否已经访问过
+  //为每一个函数赋予独一的ID
   if (fMap->find(name) != fMap->end()) {//避免为相同函数重复使用相同的 ID
       (*fMap)[name] = ++FID; 
   }
@@ -96,10 +96,8 @@ bool CollectICallHints::processFunction(Function &F) {
 
   errs() << "process function: " << F.getName() << "\n";
 
-  for (auto &I : findIndirectCallSites(F)) {//遍历函数F中的所有间接调用
+  for (auto &I : findIndirectCallSites(F)) {//遍历函数F中的所有间接调用指令
     modified |= instrumentICall(I, fid, count);
-
-    /* label the indirect call cites in this function */
     count++;
   }
 
@@ -109,7 +107,7 @@ bool CollectICallHints::processFunction(Function &F) {
   插桩的调用指令B；    B调用的目标地址：插入函数 __collect_icall_hints 的地址*/
 
 bool CollectICallHints::instrumentICall(Instruction *I, int fid, int count) {
-    /*初始化B的参数 */
+    /*初始化参数 */
     IRBuilder<> B(I);//声明被插桩位置：I
     Module *M = B.GetInsertBlock()->getModule();//获得插桩位置的基本块属于的Modul
     Type *VoidTy = B.getVoidTy();
