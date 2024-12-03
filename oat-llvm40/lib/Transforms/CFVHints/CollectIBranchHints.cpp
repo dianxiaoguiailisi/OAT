@@ -23,30 +23,28 @@
 
 #include "llvm/Pass.h"
 #include <string>
-
 #include "llvm/Analysis/CFG.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Support/raw_ostream.h"
 
+//宏定义
 #define DEBUG_TYPE "collect-ibranch-hints"
-
 using namespace llvm;
-
 typedef std::map<std::string, int> FunctionMap;
 
 namespace {
-struct  CollectIBranchHints : public FunctionPass {
-  static char ID;
-  static FunctionMap *fMap;//存储了函数名到函数 ID 的映射
-  static int FID;
+  struct  CollectIBranchHints : public FunctionPass {
+    static char ID;
+    static FunctionMap *fMap;//存储了函数名到函数 ID 的映射
+    static int FID;
 
-  CollectIBranchHints() : FunctionPass(ID) {}
-  bool runOnFunction(Function &F) override;
-  bool instrumentIBranch(Instruction *I, int fid, int count);
-};
-} // end of namespace
+    CollectIBranchHints() : FunctionPass(ID) {}
+    bool runOnFunction(Function &F) override;
+    bool instrumentIBranch(Instruction *I, int fid, int count);
+  };
+} 
 
 bool CollectIBranchHints::runOnFunction(Function &F) {
   bool modified = false;
@@ -58,8 +56,8 @@ bool CollectIBranchHints::runOnFunction(Function &F) {
   if (fMap->find(name) != fMap->end()) {
       (*fMap)[name] = ++FID; //每次遇到一个新的函数，赋予新的ID
   }
+  fid = (*fMap)[name];
 
-  fid = (*fMap)[name];//获取函数ID
   //遍历每一个基本块
   for (auto &BB : F) {
     /*
@@ -69,18 +67,12 @@ bool CollectIBranchHints::runOnFunction(Function &F) {
       */
     if (IndirectBrInst *IBI = dyn_cast<IndirectBrInst>(BB.getTerminator())) {//若是间接指令
       modified |= instrumentIBranch(IBI, fid, count);//进行插桩，IBI：间接指令;fid:函数ID；count:插桩数量
-      /* label the indirect branch cites in this function */
+      /* 标记该函数中的间接分支引用*/
       count++;
     }
   }
   return modified;
 }
-/*
-  instrumentIBranch:插桩函数：
-    I:插桩指令；
-    fid:函数ID；
-    count:插桩的数量；
-*/
 bool CollectIBranchHints::instrumentIBranch(Instruction *I, int fid, int count) {
     IRBuilder<> B(I);//指明插入指令的位置（I之后）
     Module *M = B.GetInsertBlock()->getModule();//获得当前模块M
@@ -101,26 +93,23 @@ bool CollectIBranchHints::instrumentIBranch(Instruction *I, int fid, int count) 
     }
     //再次确保目标指令指针不为空
     assert(target != nullptr);
+
+    //在模块中插入函数声明
+    Constant *ConstCollectIBranchHints= M->getOrInsertFunction("__collect_ibranch_hints"/*外部函数名*/,VoidTy/*返回类型*/,I64Ty/*参数*/, I64Ty/*参数*/, nullptr/*参数结束标志*/);
+    Function *FuncCollectIBranchHints= cast<Function>(ConstCollectIBranchHints);//将之前插入的外部函数声明转换为 Function 类型指针
     
-    Constant *ConstCollectIBranchHints= M->getOrInsertFunction("__collect_ibranch_hints",//外部函数名
-                                                                    VoidTy,//返回类型
-                                                                     I64Ty,//第一个参数类型
-                                                                     I64Ty, //第二个参数类型
-                                                                     I64Ty, //第三个参数类型
-                                                                     nullptr);//可选属性
-      //将之前插入的外部函数声明转换为 Function 类型指针
-    Function *FuncCollectIBranchHints= cast<Function>(ConstCollectIBranchHints);
-    //创建常量整数（ConstantInt）来表示 fid 和 count
-    constFid = ConstantInt::get((IntegerType*)I64Ty, fid);
-    constCount = ConstantInt::get((IntegerType*)I64Ty, count);
-    //将间接分支指令的目标地址从指针类型转换为整数类型（i64）
-    castVal = CastInst::Create(Instruction::PtrToInt, target, I64Ty, "ptrtoint", I);
-    //CreateCall(插入函数指针，{参数列表})
+    //参数定义
+      constFid = ConstantInt::get((IntegerType*)I64Ty, fid);
+      constCount = ConstantInt::get((IntegerType*)I64Ty, count);
+      //将指针类型转化为整数类型（无法直接进行必须这样操作）
+      castVal = CastInst::Create(Instruction::PtrToInt, target, I64Ty, "ptrtoint", I);
+    //插入调用指令
     B.CreateCall(FuncCollectIBranchHints, {constFid, constCount, castVal});
     return true;
 }
-
+//静态成员变量初始化
 char CollectIBranchHints::ID = 0;
 int CollectIBranchHints::FID = 0;
 FunctionMap *CollectIBranchHints::fMap= new FunctionMap();
+//注册pass
 static RegisterPass<CollectIBranchHints> X("collect-ibranch-hints-pass", "Collect Indirect Branch Hints Info", false, false);
